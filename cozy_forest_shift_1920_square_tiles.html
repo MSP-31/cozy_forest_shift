@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>그림패 이동 퍼즐 - Cozy Forest Shift</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <!-- Google Fonts -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              forest: {
+                warm: "#f3e9dc",
+                beige: "#fcf6eb",
+                outline: "#5c4033",
+                yellow: "#f4c430",
+                green: "#86a873",
+                red: "#e07a5f",
+              },
+            },
+            fontFamily: {
+              sans: ["Noto Sans KR", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        background-color: #f5ebe0;
+        background-image: radial-gradient(circle, #f5ebe0 60%, #e3d5ca 100%);
+        min-height: 100vh;
+        color: #5c4033;
+        user-select: none;
+        overflow-x: hidden;
+        font-size: 1.05rem;
+        letter-spacing: -0.5px;
+      }
+
+      .cozy-panel {
+        background-color: #fbf7f0;
+        border: 4px solid #5c4033;
+        border-radius: 20px;
+        box-shadow: 0 6px 0 #5c4033;
+        position: relative;
+      }
+
+      .btn-cozy {
+        border: 3px solid #5c4033;
+        border-radius: 12px;
+        font-weight: 800;
+        transition:
+          transform 0.1s ease,
+          box-shadow 0.1s ease;
+      }
+      .btn-cozy:active {
+        transform: translateY(4px);
+        box-shadow: 0 1px 0 #5c4033 !important;
+      }
+
+      .btn-cozy-red {
+        background-color: #e07a5f;
+        color: #fbf7f0;
+        box-shadow: 0 4px 0 #5c4033;
+      }
+      .btn-cozy-green {
+        background-color: #8bb174;
+        color: #fbf7f0;
+        box-shadow: 0 4px 0 #5c4033;
+      }
+      .btn-cozy-yellow {
+        background-color: #f4c430;
+        color: #5c4033;
+        box-shadow: 0 4px 0 #5c4033;
+      }
+
+      .track-bg {
+        background-color: #eddcd2;
+        border: 3px solid #5c4033;
+        border-radius: 12px;
+        box-shadow: inset 0 4px 8px rgba(92, 64, 51, 0.15);
+      }
+
+      .empty-slot {
+        aspect-ratio: 1 / 1;
+        border: 2px dashed rgba(92, 64, 51, 0.3);
+        border-radius: 10px;
+        background: rgba(251, 247, 240, 0.3);
+        pointer-events: none;
+      }
+
+      .tile-block {
+        aspect-ratio: 1 / 1;
+        transition:
+          transform 0.15s ease,
+          opacity 0.2s;
+        border-radius: 12px;
+        cursor: grab;
+        position: relative;
+        border: 3px solid #5c4033;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .tile-block:active {
+        cursor: grabbing;
+      }
+
+      .tile-revealed {
+        background-color: #fdfaf6;
+        box-shadow:
+          0 4px 0 #d9c5b2,
+          inset 0 -2px 0 rgba(0, 0, 0, 0.05);
+        color: #5c4033;
+        font-size: 2.2rem;
+      }
+
+      @media (min-width: 768px) {
+        .tile-revealed {
+          font-size: 2.8rem;
+        }
+      }
+
+      .tile-hidden {
+        background-color: #cb997e;
+        box-shadow:
+          0 4px 0 #a07156,
+          inset 0 0 10px rgba(0, 0, 0, 0.1);
+        color: #fbf7f0;
+        font-size: 1.8rem;
+      }
+      .tile-hidden-active:hover {
+        filter: brightness(1.05);
+      }
+
+      .disabled-tile {
+        cursor: not-allowed !important;
+        opacity: 0.6;
+      }
+      .disabled-tile:active {
+        transform: none !important;
+      }
+
+      .dragging {
+        opacity: 0.5;
+        transform: scale(0.92);
+        box-shadow: 0 2px 0 #5c4033 !important;
+      }
+
+      .drag-over-valid {
+        background-color: #ffe8d6 !important;
+        border-color: #ddb892 !important;
+        box-shadow: inset 0 0 15px rgba(221, 184, 146, 0.5) !important;
+      }
+
+      .column-full-track {
+        background-color: #f5cac3 !important;
+        border-color: #f28482 !important;
+      }
+
+      .text-shadow {
+        text-shadow: 1px 1px 0px rgba(92, 64, 51, 0.15);
+      }
+
+      /* 1920px 데스크톱 최적화: 넓은 보드와 세로 공간을 효율적으로 사용 */
+      @media (min-width: 1440px) {
+        body {
+          font-size: 0.98rem;
+          padding: 12px 24px;
+        }
+        .cozy-panel {
+          border-width: 3px;
+          border-radius: 18px;
+        }
+        header.cozy-panel {
+          padding: 10px 20px;
+          margin-bottom: 12px;
+          gap: 12px;
+        }
+        main {
+          gap: 12px !important;
+        }
+        #statusBanner {
+          padding: 9px 16px;
+        }
+        #storageContainer {
+          padding: 10px 14px;
+          gap: 8px;
+        }
+        #storageArea {
+          min-height: 58px;
+        }
+        #columnsGrid {
+          gap: 6px !important;
+        }
+        #columnsGrid > div {
+          gap: 4px !important;
+          padding: 5px !important;
+        }
+        #columnsGrid .tile-block,
+        #columnsGrid .empty-slot {
+          width: 100%;
+          height: auto;
+          min-height: 0;
+          aspect-ratio: 1 / 1;
+          border-radius: 9px;
+        }
+        #columnsGrid .tile-block {
+          border-width: 2px;
+        }
+        #columnsGrid .tile-revealed {
+          font-size: clamp(1.45rem, 2.2vh, 2rem);
+        }
+        #columnsGrid .tile-hidden {
+          font-size: clamp(1.2rem, 1.9vh, 1.65rem);
+        }
+        #columnsGrid .empty-slot {
+          border-radius: 8px;
+        }
+        #storageArea .tile-block,
+        #storageArea .empty-slot,
+        #storageArea > div {
+          width: 3.5rem !important;
+          height: 3.5rem !important;
+        }
+      }
+      @media (min-width: 1800px) {
+        header,
+        main {
+          max-width: 1760px;
+        }
+        #columnsGrid > div {
+          padding: 6px !important;
+        }
+      }
+    </style>
+  </head>
+  <body
+    class="flex flex-col min-h-screen relative font-sans antialiased p-2 md:p-4"
+  >
+    <!-- 오디오 엘리먼트 (첨부된 음원 파일명 지정) -->
+    <audio id="bgmAudio" loop preload="auto">
+      <source
+        src="vr_TGwce6LCGoZJSmvTM47dA-instrumental.mp3"
+        type="audio/mp3"
+      />
+    </audio>
+
+    <!-- Header Section -->
+    <header
+      class="relative z-10 w-full max-w-[1760px] mx-auto cozy-panel px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-4"
+    >
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-forest-yellow border-4 border-forest-outline flex items-center justify-center text-2xl md:text-3xl shadow"
+        >
+          🐾
+        </div>
+        <div>
+          <h1
+            class="text-xl md:text-2xl font-black text-forest-outline tracking-tight"
+          >
+            Cozy 그림패 퍼즐
+          </h1>
+          <p class="text-xs text-amber-800 font-bold">108 Tiles · 10 Columns</p>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="flex items-center gap-2">
+        <div
+          class="bg-forest-beige border-3 border-forest-outline rounded-full px-3 py-1.5 flex items-center gap-2 shadow-sm text-sm"
+        >
+          <i class="fa-solid fa-clock text-amber-600"></i>
+          <span
+            id="timer"
+            class="font-black text-forest-outline tracking-widest"
+            >00:00</span
+          >
+        </div>
+        <div
+          class="bg-forest-beige border-3 border-forest-outline rounded-full px-3 py-1.5 flex items-center gap-2 shadow-sm text-sm"
+        >
+          <i class="fa-solid fa-paw text-orange-500"></i>
+          <span id="moveCounter" class="font-black text-forest-outline">0</span>
+        </div>
+        <div
+          class="bg-forest-beige border-3 border-forest-outline rounded-full px-3 py-1.5 flex items-center gap-2 shadow-sm text-sm"
+        >
+          <i class="fa-solid fa-star text-yellow-500"></i>
+          <span id="revealedCounter" class="font-black text-forest-outline"
+            >0/108</span
+          >
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- BGM 토글 버튼 -->
+        <div
+          class="bg-forest-beige border-2 border-forest-outline rounded-xl px-3 py-1.5 flex items-center gap-2 shadow-sm"
+        >
+          <button
+            id="btnBgm"
+            class="btn-cozy btn-cozy-yellow px-3 py-1.5 text-xs md:text-sm flex items-center gap-1.5"
+          >
+            <i class="fa-solid fa-music"></i> <span id="bgmText">BGM 켜기</span>
+          </button>
+          <label for="bgmVolume" class="text-xs font-black whitespace-nowrap"
+            >음량</label
+          >
+          <input
+            id="bgmVolume"
+            type="range"
+            min="0"
+            max="100"
+            value="50"
+            class="w-24 md:w-28 accent-amber-700 cursor-pointer"
+            aria-label="배경 음악 음량"
+          />
+          <span
+            id="bgmVolumeValue"
+            class="text-xs font-black tabular-nums w-8 text-right"
+            >50%</span
+          >
+        </div>
+
+        <select
+          id="themeSelect"
+          class="bg-forest-beige border-3 border-forest-outline text-forest-outline font-black text-xs md:text-sm rounded-xl px-2 py-1.5 outline-none cursor-pointer shadow-sm"
+        >
+          <option value="ocean">🌊 해양 생물</option>
+          <option value="animal" selected>🐶 육상 동물</option>
+          <option value="flower">🌷 꽃과 식물</option>
+          <option value="food">🍰 디저트/과일</option>
+          <option value="face">🥰 표정 모음</option>
+        </select>
+
+        <select
+          id="difficultySelect"
+          class="bg-forest-beige border-3 border-forest-outline text-forest-outline font-black text-xs md:text-sm rounded-xl px-2 py-1.5 outline-none cursor-pointer shadow-sm"
+        >
+          <option value="1">난이도 1</option>
+          <option value="3">난이도 3</option>
+          <option value="5" selected>난이도 5 (보통)</option>
+          <option value="8">난이도 8</option>
+          <option value="10">난이도 10 (극악)</option>
+        </select>
+
+        <button
+          id="btnRules"
+          class="btn-cozy btn-cozy-green px-3 py-1.5 text-xs md:text-sm flex items-center gap-1.5"
+        >
+          <i class="fa-solid fa-heart"></i>
+        </button>
+        <button
+          id="btnRestart"
+          class="btn-cozy btn-cozy-red px-3 py-1.5 text-xs md:text-sm flex items-center gap-1.5"
+        >
+          <i class="fa-solid fa-redo"></i> 새 게임
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main
+      class="relative z-10 flex-1 max-w-[1760px] w-full mx-auto flex flex-col gap-4"
+    >
+      <div
+        id="statusBanner"
+        class="bg-forest-beige border-4 border-forest-outline rounded-2xl w-full p-3 px-5 flex items-center gap-3 text-sm md:text-base shadow-md transform rotate-[-0.5deg]"
+      >
+        <span id="statusIcon" class="text-xl animate-bounce text-orange-400"
+          >💡</span
+        >
+        <span id="statusMessage" class="font-bold text-forest-outline">
+          상단의 <strong class="text-amber-700">BGM 켜기 버튼</strong>을 누르면
+          음악이 재생됩니다
+        </span>
+      </div>
+
+      <!-- Inventory -->
+      <div
+        class="cozy-panel p-3 md:p-4 flex flex-col gap-3"
+        id="storageContainer"
+      >
+        <div class="flex items-center justify-between pointer-events-none px-1">
+          <div
+            class="flex items-center gap-2 text-forest-outline font-black text-base md:text-lg"
+          >
+            <i class="fa-solid fa-box-open text-orange-400"></i>
+            <span>임시 보관함 (인벤토리)</span>
+          </div>
+          <div
+            class="bg-forest-yellow border-3 border-forest-outline text-forest-outline px-3 py-1 rounded-xl text-sm font-black"
+          >
+            <span id="storageCount">0 / 2</span>
+          </div>
+        </div>
+
+        <div
+          id="storageArea"
+          class="min-h-[70px] track-bg p-2 flex items-center gap-2 flex-wrap transition-all"
+        >
+          <!-- JS Generated -->
+        </div>
+      </div>
+
+      <!-- Game Board -->
+      <div class="cozy-panel p-2 md:p-4 relative">
+        <div class="grid grid-cols-10 gap-1 md:gap-2 mb-2 px-1">
+          <script>
+            for (let i = 1; i <= 10; i++) {
+              document.write(
+                `<div class="text-center font-black text-forest-outline/80 text-base md:text-xl text-shadow">${i}</div>`,
+              );
+            }
+          </script>
+        </div>
+
+        <div
+          id="columnsGrid"
+          class="grid grid-cols-10 gap-1 md:gap-2 flex-1 items-start"
+        >
+          <!-- Generated via JavaScript -->
+        </div>
+      </div>
+    </main>
+
+    <!-- Win Modal -->
+    <div
+      id="winModal"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-forest-beige border-8 border-forest-outline rounded-3xl max-w-md w-full p-8 text-center space-y-6 relative shadow-2xl"
+      >
+        <div
+          class="absolute -top-12 left-1/2 transform -translate-x-1/2 text-7xl"
+        >
+          🎉
+        </div>
+
+        <div class="space-y-2">
+          <h2 class="text-3xl md:text-4xl font-black text-forest-outline">
+            퀘스트 완료!
+          </h2>
+          <p id="winScoreText" class="text-amber-800 font-bold text-lg">
+            최종 점수: 100점 (⭐)
+          </p>
+        </div>
+
+        <div
+          class="bg-forest-warm border-4 border-forest-outline rounded-2xl p-4 grid grid-cols-2 gap-2 text-forest-outline shadow-inner"
+        >
+          <div class="p-2 border-r-2 border-forest-outline">
+            <div class="text-xs font-bold text-amber-800 mb-1">소요 시간</div>
+            <div id="winTime" class="text-xl font-black tracking-wider">
+              00:00
+            </div>
+          </div>
+          <div class="p-2">
+            <div class="text-xs font-bold text-amber-800 mb-1">
+              최대 보관함 칸수
+            </div>
+            <div id="winMaxStorage" class="text-xl font-black text-orange-600">
+              2칸
+            </div>
+          </div>
+        </div>
+
+        <button
+          id="btnWinRestart"
+          class="w-full btn-cozy btn-cozy-red py-4 text-xl shadow-md"
+        >
+          다시 시작하기
+        </button>
+      </div>
+    </div>
+
+    <!-- Rules Modal -->
+    <div
+      id="rulesModal"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4"
+    >
+      <div
+        class="bg-forest-beige border-8 border-forest-outline rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl"
+      >
+        <div
+          class="flex items-center justify-between border-b-4 border-forest-outline pb-3"
+        >
+          <h3
+            class="text-2xl md:text-3xl font-black text-forest-outline flex items-center gap-2"
+          >
+            🌾 Cozy 모험가 안내서
+          </h3>
+          <button
+            id="btnCloseRules"
+            class="text-forest-outline/60 hover:text-forest-outline text-3xl"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div
+          class="space-y-4 text-base text-forest-outline font-medium leading-relaxed"
+        >
+          <p>
+            1. 각 세로줄은
+            <strong class="font-black text-amber-800">최대 12칸</strong>까지만
+            쌓을 수 있습니다.
+          </p>
+          <p>
+            2. 세로줄 맨 위에 위치하여
+            <strong class="font-black text-amber-800"
+              >위에 덮인 패가 없는 물음표 상자(❓)</strong
+            >만 클릭해서 내용물을 확인할 수 있습니다.
+          </p>
+          <p>
+            3. <strong class="font-black">자동 확장 보관함:</strong> 자물쇠가 안
+            잠긴 마지막 칸에 패를 올리는
+            <strong
+              >순간 다음 칸의 자물쇠가 효과음과 함께 즉시 열립니다!</strong
+            >
+          </p>
+          <p>
+            4. <strong class="font-black">점수 시스템:</strong> 보관함을 딱
+            2칸만 사용하면 <strong>100점 만점</strong>! 보관함을 많이 열수록
+            점수가 차감됩니다.
+          </p>
+        </div>
+        <button
+          id="btnConfirmRules"
+          class="w-full btn-cozy btn-cozy-green py-3 text-lg mt-2"
+        >
+          이해했어요!
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // --- Web Audio API 기반 효과음 및 첨부된 오디오 BGM 시스템 ---
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const bgmAudio = document.getElementById("bgmAudio");
+      bgmAudio.volume = 0.5;
+      const bgmVolumeEl = document.getElementById("bgmVolume");
+      const bgmVolumeValueEl = document.getElementById("bgmVolumeValue");
+
+      bgmVolumeEl.addEventListener("input", (e) => {
+        const volume = Number(e.target.value) / 100;
+        bgmAudio.volume = volume;
+        bgmVolumeValueEl.textContent = `${e.target.value}%`;
+      });
+
+      function toggleBGM() {
+        const btnText = document.getElementById("bgmText");
+
+        if (bgmAudio.paused) {
+          bgmAudio
+            .play()
+            .then(() => {
+              btnText.innerText = "BGM 끄기";
+            })
+            .catch((err) => {
+              console.log("Audio play blocked:", err);
+              alert("브라우저 정책상 화면을 클릭한 뒤 BGM을 켜주세요.");
+            });
+        } else {
+          bgmAudio.pause();
+          btnText.innerText = "BGM 켜기";
+        }
+      }
+
+      function playSound(type) {
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+
+        if (type === "reveal") {
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(400, now);
+          osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.15);
+        } else if (type === "drop") {
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(180, now);
+          osc.frequency.exponentialRampToValueAtTime(60, now + 0.1);
+          gain.gain.setValueAtTime(0.3, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } else if (type === "unlock") {
+          osc.type = "square";
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.setValueAtTime(659.25, now + 0.08);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === "win") {
+          const notes = [523.25, 659.25, 783.99, 1046.5];
+          notes.forEach((freq, idx) => {
+            const subOsc = audioCtx.createOscillator();
+            const subGain = audioCtx.createGain();
+            subOsc.connect(subGain);
+            subGain.connect(audioCtx.destination);
+            subOsc.type = "sine";
+            subOsc.frequency.setValueAtTime(freq, now + idx * 0.12);
+            subGain.gain.setValueAtTime(0.2, now + idx * 0.12);
+            subGain.gain.exponentialRampToValueAtTime(
+              0.01,
+              now + idx * 0.12 + 0.3,
+            );
+            subOsc.start(now + idx * 0.12);
+            subOsc.stop(now + idx * 0.12 + 0.3);
+          });
+        }
+      }
+
+      const NUM_COLUMNS = 10;
+      const TOTAL_TILES = 108;
+      const MAX_COLUMN_CAPACITY = 12;
+      const MAX_STORAGE_CAPACITY = 10;
+      const START_STORAGE_CAPACITY = 2;
+
+      const THEMES = {
+        ocean: [
+          {id: "fish", icon: "🐟"},
+          {id: "shell", icon: "🐚"},
+          {id: "crab", icon: "🦀"},
+          {id: "jellyfish", icon: "🪼"},
+          {id: "starfish", icon: "⭐"},
+          {id: "coral", icon: "🪸"},
+          {id: "dolphin", icon: "🐬"},
+          {id: "seaweed", icon: "🌿"},
+          {id: "penguin", icon: "🐧"},
+        ],
+        animal: [
+          {id: "dog", icon: "🐶"},
+          {id: "cat", icon: "🐱"},
+          {id: "mouse", icon: "🐭"},
+          {id: "hamster", icon: "🐹"},
+          {id: "rabbit", icon: "🐰"},
+          {id: "fox", icon: "🦊"},
+          {id: "bear", icon: "🐻"},
+          {id: "panda", icon: "🐼"},
+          {id: "koala", icon: "🐨"},
+        ],
+        flower: [
+          {id: "tulip", icon: "🌷"},
+          {id: "cherryblossom", icon: "🌸"},
+          {id: "rose", icon: "🌹"},
+          {id: "hibiscus", icon: "🌺"},
+          {id: "sunflower", icon: "🌻"},
+          {id: "blossom", icon: "🌼"},
+          {id: "clover", icon: "🍀"},
+          {id: "cactus", icon: "🌵"},
+          {id: "mushroom", icon: "🍄"},
+        ],
+        food: [
+          {id: "apple", icon: "🍎"},
+          {id: "tangerine", icon: "🍊"},
+          {id: "strawberry", icon: "🍓"},
+          {id: "watermelon", icon: "🍉"},
+          {id: "grape", icon: "🍇"},
+          {id: "cake", icon: "🍰"},
+          {id: "donut", icon: "🍩"},
+          {id: "icecream", icon: "🍦"},
+          {id: "candy", icon: "🍬"},
+        ],
+        face: [
+          {id: "smile", icon: "😀"},
+          {id: "laugh", icon: "😂"},
+          {id: "love", icon: "🥰"},
+          {id: "cool", icon: "😎"},
+          {id: "think", icon: "🤔"},
+          {id: "sleep", icon: "😴"},
+          {id: "cry", icon: "😭"},
+          {id: "angry", icon: "😡"},
+          {id: "scream", icon: "😱"},
+        ],
+      };
+
+      const DIFFICULTY_DISTRIBUTIONS = {
+        1: [11, 11, 11, 11, 11, 11, 11, 11, 10, 10],
+        2: [12, 11, 11, 11, 11, 11, 11, 10, 10, 10],
+        3: [12, 12, 11, 11, 11, 11, 10, 10, 10, 10],
+        4: [12, 12, 12, 11, 11, 10, 10, 10, 10, 10],
+        5: [12, 12, 12, 12, 10, 10, 10, 10, 10, 10],
+        6: [12, 12, 12, 12, 12, 10, 10, 10, 9, 9],
+        7: [12, 12, 12, 12, 12, 12, 9, 9, 9, 9],
+        8: [12, 12, 12, 12, 12, 12, 12, 8, 8, 8],
+        9: [12, 12, 12, 12, 12, 12, 12, 12, 6, 6],
+        10: [12, 12, 12, 12, 12, 12, 12, 12, 12, 0],
+      };
+
+      let currentDifficulty = 5;
+      let currentThemeKey = "animal";
+
+      let gameState = {
+        columns: [],
+        storage: [],
+        storageCapacity: START_STORAGE_CAPACITY,
+        maxStorageReached: START_STORAGE_CAPACITY,
+        moveCount: 0,
+        startTime: null,
+        timerInterval: null,
+        isGameActive: false,
+        revealedCount: 0,
+      };
+
+      let draggedItemInfo = null;
+
+      const columnsGridEl = document.getElementById("columnsGrid");
+      const storageAreaEl = document.getElementById("storageArea");
+      const storageContainerEl = document.getElementById("storageContainer");
+      const difficultySelectEl = document.getElementById("difficultySelect");
+      const themeSelectEl = document.getElementById("themeSelect");
+
+      function initGame() {
+        let deck = [];
+        let tileIdCounter = 1;
+        const currentThemePictures = THEMES[currentThemeKey];
+
+        currentThemePictures.forEach((type) => {
+          for (let i = 0; i < 12; i++) {
+            deck.push({
+              id: `TILE-${tileIdCounter++}`,
+              pictureType: type,
+              isRevealed: false,
+            });
+          }
+        });
+
+        for (let i = deck.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+
+        let distribution = [...DIFFICULTY_DISTRIBUTIONS[currentDifficulty]];
+        for (let i = distribution.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [distribution[i], distribution[j]] = [
+            distribution[j],
+            distribution[i],
+          ];
+        }
+
+        gameState.columns = Array.from({length: NUM_COLUMNS}, () => []);
+        let deckIndex = 0;
+
+        for (let col = 0; col < NUM_COLUMNS; col++) {
+          const count = distribution[col];
+          for (let k = 0; k < count; k++) {
+            gameState.columns[col].push(deck[deckIndex++]);
+          }
+        }
+
+        sortColumnLayeringAll();
+        gameState.storage = [];
+        gameState.storageCapacity = START_STORAGE_CAPACITY;
+        gameState.maxStorageReached = START_STORAGE_CAPACITY;
+        gameState.moveCount = 0;
+        gameState.isGameActive = true;
+        gameState.revealedCount = 0;
+
+        clearInterval(gameState.timerInterval);
+        gameState.startTime = Date.now();
+        gameState.timerInterval = setInterval(updateTimer, 1000);
+
+        updateStatsUI();
+        renderBoard();
+      }
+
+      function sortColumnLayeringAll() {
+        gameState.columns.forEach((_, idx) => sortColumnLayering(idx));
+      }
+
+      function sortColumnLayering(colIdx) {
+        const col = gameState.columns[colIdx];
+        const revealed = col.filter((t) => t.isRevealed);
+        const hidden = col.filter((t) => !t.isRevealed);
+        gameState.columns[colIdx] = [...revealed, ...hidden];
+      }
+
+      function renderBoard() {
+        columnsGridEl.innerHTML = "";
+
+        gameState.columns.forEach((col, colIdx) => {
+          const isFull = col.length >= MAX_COLUMN_CAPACITY;
+          const emptyCount = MAX_COLUMN_CAPACITY - col.length;
+
+          const colEl = document.createElement("div");
+          colEl.className = `flex flex-col gap-1 md:gap-1.5 p-1 md:p-1.5 track-bg transition-colors duration-200 relative`;
+
+          if (isFull) colEl.classList.add("column-full-track");
+
+          colEl.ondragover = (e) => handleDragOverColumn(e, colIdx);
+          colEl.ondragleave = (e) => handleDragLeaveColumn(e);
+          colEl.ondrop = (e) => handleDropOnColumn(e, colIdx);
+
+          for (let i = 0; i < emptyCount; i++) {
+            const slot = document.createElement("div");
+            slot.className = "empty-slot";
+            colEl.appendChild(slot);
+          }
+
+          col.forEach((tile, tileIdx) => {
+            const isClickableHidden = !tile.isRevealed && tileIdx === 0;
+            const tileEl = createCozyTile(
+              tile,
+              isClickableHidden,
+              "column",
+              colIdx,
+              tileIdx,
+            );
+            colEl.appendChild(tileEl);
+          });
+
+          columnsGridEl.appendChild(colEl);
+        });
+
+        renderStorage();
+      }
+
+      function createCozyTile(
+        tile,
+        isClickableHidden,
+        location,
+        colIdx,
+        tileIdx,
+      ) {
+        const el = document.createElement("div");
+        let classes = "tile-block ";
+
+        if (!tile.isRevealed) {
+          classes +=
+            "tile-hidden tile-hidden-active font-black text-xl md:text-2xl ";
+          if (isClickableHidden) {
+            classes += "cursor-pointer";
+            el.innerHTML = '<span class="text-yellow-100">❓</span>';
+            el.onclick = (e) => {
+              e.stopPropagation();
+              revealTile(colIdx, tileIdx);
+            };
+          } else {
+            classes += "disabled-tile";
+            el.innerHTML = '<span class="text-amber-800">?</span>';
+          }
+        } else {
+          classes += "tile-revealed";
+          el.innerHTML = tile.pictureType.icon;
+
+          el.draggable = true;
+          el.ondragstart = (e) => {
+            const chunkCount = location === "column" ? tileIdx + 1 : 1;
+            draggedItemInfo = {
+              tile,
+              source: location,
+              colIndex: colIdx,
+              tileIndex: tileIdx,
+              chunkCount,
+            };
+            e.dataTransfer.effectAllowed = "move";
+
+            setTimeout(() => {
+              if (location === "column") {
+                const colContainer = el.parentElement;
+                const tiles = colContainer.querySelectorAll(
+                  ".tile-block:not(.disabled-tile)",
+                );
+                for (let i = 0; i <= tileIdx; i++) {
+                  if (tiles[i]) tiles[i].classList.add("dragging");
+                }
+              } else {
+                el.classList.add("dragging");
+              }
+            }, 0);
+          };
+          el.ondragend = (e) => {
+            document
+              .querySelectorAll(".dragging")
+              .forEach((node) => node.classList.remove("dragging"));
+            draggedItemInfo = null;
+            renderBoard();
+          };
+        }
+
+        el.className = classes;
+        return el;
+      }
+
+      function renderStorage() {
+        storageAreaEl.innerHTML = "";
+        document.getElementById("storageCount").innerText =
+          `${gameState.storage.length} / ${gameState.storageCapacity}`;
+
+        for (let i = 0; i < MAX_STORAGE_CAPACITY; i++) {
+          if (i < gameState.storageCapacity) {
+            if (i < gameState.storage.length) {
+              const tile = gameState.storage[i];
+              const tileEl = createCozyTile(tile, false, "storage", null, i);
+              tileEl.style.width = "4rem";
+              tileEl.style.height = "4rem";
+              storageAreaEl.appendChild(tileEl);
+            } else {
+              const slot = document.createElement("div");
+              slot.className = "empty-slot flex items-center justify-center";
+              slot.style.width = "4rem";
+              slot.style.height = "4rem";
+              storageAreaEl.appendChild(slot);
+            }
+          } else {
+            const lockSlot = document.createElement("div");
+            lockSlot.className =
+              "w-16 h-16 bg-[#e3d5ca] border-3 border-forest-outline rounded-2xl flex items-center justify-center shadow text-forest-outline opacity-70";
+            lockSlot.innerHTML = '<i class="fa-solid fa-lock text-xl"></i>';
+            storageAreaEl.appendChild(lockSlot);
+          }
+        }
+
+        storageContainerEl.ondragover = (e) => {
+          if (!draggedItemInfo || draggedItemInfo.source === "storage") return;
+          e.preventDefault();
+          storageContainerEl.classList.add("drag-over-valid");
+        };
+        storageContainerEl.ondragleave = () => {
+          storageContainerEl.classList.remove("drag-over-valid");
+        };
+        storageContainerEl.ondrop = (e) => {
+          e.preventDefault();
+          storageContainerEl.classList.remove("drag-over-valid");
+          if (!draggedItemInfo || draggedItemInfo.source === "storage") return;
+
+          let availableSlots =
+            gameState.storageCapacity - gameState.storage.length;
+
+          if (draggedItemInfo.chunkCount > availableSlots) {
+            while (
+              draggedItemInfo.chunkCount >
+                gameState.storageCapacity - gameState.storage.length &&
+              gameState.storageCapacity < MAX_STORAGE_CAPACITY
+            ) {
+              gameState.storageCapacity++;
+              playSound("unlock");
+            }
+          }
+
+          if (gameState.storageCapacity > gameState.maxStorageReached) {
+            gameState.maxStorageReached = gameState.storageCapacity;
+          }
+
+          availableSlots = gameState.storageCapacity - gameState.storage.length;
+
+          if (draggedItemInfo.chunkCount <= availableSlots) {
+            moveSelectedToStorage(draggedItemInfo);
+          } else {
+            alert("보관함 최대치(10칸)를 초과하여 한 번에 보관할 수 없습니다!");
+          }
+        };
+      }
+
+      function handleDragOverColumn(e, colIdx) {
+        if (!draggedItemInfo) return;
+        const sourceCol =
+          draggedItemInfo.source === "column" ? draggedItemInfo.colIndex : null;
+
+        if (checkCanMoveToColumn(draggedItemInfo, colIdx, sourceCol)) {
+          e.preventDefault();
+          e.currentTarget.classList.add("drag-over-valid");
+        }
+      }
+
+      function handleDragLeaveColumn(e) {
+        e.currentTarget.classList.remove("drag-over-valid");
+      }
+
+      function handleDropOnColumn(e, targetColIdx) {
+        e.preventDefault();
+        e.currentTarget.classList.remove("drag-over-valid");
+        if (!draggedItemInfo) return;
+
+        const sourceCol =
+          draggedItemInfo.source === "column" ? draggedItemInfo.colIndex : null;
+        if (!checkCanMoveToColumn(draggedItemInfo, targetColIdx, sourceCol))
+          return;
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        const dropY = e.clientY - rect.top;
+
+        const position = dropY < rect.height / 2 ? "top" : "bottom";
+        executeMoveDirect(draggedItemInfo, targetColIdx, position);
+      }
+
+      function checkCanMoveToColumn(dragInfo, targetColIdx, sourceColIdx) {
+        if (targetColIdx === sourceColIdx) return false;
+        const targetCol = gameState.columns[targetColIdx];
+        const movingCount = dragInfo.chunkCount;
+
+        if (targetCol.length + movingCount > MAX_COLUMN_CAPACITY) return false;
+        if (targetCol.length === 0) return true;
+        return targetCol.some(
+          (t) =>
+            t.isRevealed && t.pictureType.id === dragInfo.tile.pictureType.id,
+        );
+      }
+
+      function executeMoveDirect(dragItem, targetColIdx, position) {
+        const targetCol = gameState.columns[targetColIdx];
+        let movedTiles = [];
+
+        if (dragItem.source === "column") {
+          movedTiles = gameState.columns[dragItem.colIndex].splice(
+            0,
+            dragItem.tileIndex + 1,
+          );
+        } else {
+          movedTiles = gameState.storage.splice(dragItem.tileIndex, 1);
+        }
+
+        const revealedCount = targetCol.filter((t) => t.isRevealed).length;
+        if (position === "top") {
+          targetCol.unshift(...movedTiles);
+        } else {
+          targetCol.splice(revealedCount, 0, ...movedTiles);
+        }
+
+        sortColumnLayering(targetColIdx);
+        if (dragItem.source === "column") sortColumnLayering(dragItem.colIndex);
+
+        gameState.moveCount++;
+        draggedItemInfo = null;
+        playSound("drop");
+        updateStatsUI();
+        renderBoard();
+        checkWinCondition();
+      }
+
+      function moveSelectedToStorage(dragItem) {
+        let movedTiles = gameState.columns[dragItem.colIndex].splice(
+          0,
+          dragItem.tileIndex + 1,
+        );
+        gameState.storage.push(...movedTiles);
+
+        sortColumnLayering(dragItem.colIndex);
+        gameState.moveCount++;
+        draggedItemInfo = null;
+        playSound("drop");
+        updateStatsUI();
+        renderBoard();
+      }
+
+      function revealTile(colIdx, tileIdx) {
+        gameState.columns[colIdx][tileIdx].isRevealed = true;
+        gameState.revealedCount++;
+        sortColumnLayering(colIdx);
+        playSound("reveal");
+        updateStatsUI();
+        renderBoard();
+        checkWinCondition();
+      }
+
+      function checkWinCondition() {
+        let totalRevealed = 0;
+        gameState.columns.forEach((col) =>
+          col.forEach((t) => {
+            if (t.isRevealed) totalRevealed++;
+          }),
+        );
+        gameState.storage.forEach((t) => {
+          if (t.isRevealed) totalRevealed++;
+        });
+
+        if (totalRevealed === TOTAL_TILES && gameState.storage.length === 0) {
+          let allUnified = true;
+          gameState.columns.forEach((col) => {
+            if (col.length > 0) {
+              const firstType = col[0].pictureType.id;
+              if (
+                !col.every(
+                  (t) => t.isRevealed && t.pictureType.id === firstType,
+                )
+              )
+                allUnified = false;
+            }
+          });
+          if (allUnified) triggerWin();
+        }
+      }
+
+      function triggerWin() {
+        gameState.isGameActive = false;
+        clearInterval(gameState.timerInterval);
+        playSound("win");
+
+        let score = 100;
+        const extraUsed = gameState.maxStorageReached - 2;
+        if (extraUsed > 0) {
+          score = 100 - extraUsed * 20;
+        }
+        if (score < 10) score = 10;
+
+        let stars = "⭐⭐⭐";
+        if (gameState.maxStorageReached >= 6) stars = "⭐";
+        else if (gameState.maxStorageReached >= 4) stars = "⭐⭐";
+
+        document.getElementById("winScoreText").innerHTML =
+          `최종 점수: <strong class="text-orange-600">${score}점</strong> (${stars})`;
+        document.getElementById("winTime").innerText =
+          document.getElementById("timer").innerText;
+        document.getElementById("winMaxStorage").innerText =
+          `${gameState.maxStorageReached}칸`;
+
+        confetti({
+          particleCount: 200,
+          spread: 120,
+          origin: {y: 0.5},
+          colors: ["#f4c430", "#e07a5f", "#8bb174"],
+        });
+        document.getElementById("winModal").classList.remove("hidden");
+      }
+
+      function updateStatsUI() {
+        document.getElementById("moveCounter").innerText = gameState.moveCount;
+        document.getElementById("revealedCounter").innerText =
+          `${gameState.revealedCount}/${TOTAL_TILES}`;
+      }
+
+      function updateTimer() {
+        if (!gameState.isGameActive) return;
+        const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+        document.getElementById("timer").innerText =
+          `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+      }
+
+      document.getElementById("btnRestart").onclick = () => initGame();
+      document.getElementById("btnWinRestart").onclick = () => {
+        document.getElementById("winModal").classList.add("hidden");
+        initGame();
+      };
+      document.getElementById("btnRules").onclick = () =>
+        document.getElementById("rulesModal").classList.remove("hidden");
+      document.getElementById("btnCloseRules").onclick = () =>
+        document.getElementById("rulesModal").classList.add("hidden");
+      document.getElementById("btnConfirmRules").onclick = () =>
+        document.getElementById("rulesModal").classList.add("hidden");
+      document.getElementById("btnBgm").onclick = () => toggleBGM();
+
+      difficultySelectEl.onchange = (e) => {
+        currentDifficulty = parseInt(e.target.value);
+        initGame();
+      };
+
+      themeSelectEl.onchange = (e) => {
+        currentThemeKey = e.target.value;
+        initGame();
+      };
+
+      window.onload = initGame;
+    </script>
+  </body>
+</html>
