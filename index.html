@@ -2,7 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
     <title>그림패 이동 퍼즐 - Cozy Forest Shift</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -47,6 +50,7 @@
         min-height: 100vh;
         color: #5c4033;
         user-select: none;
+        -webkit-user-select: none;
         overflow-x: hidden;
         font-size: 1.05rem;
         letter-spacing: -0.5px;
@@ -116,6 +120,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        touch-action: none; /* 터치 드래그 시 스크롤 방지 */
       }
       .tile-block:active {
         cursor: grabbing;
@@ -157,9 +162,20 @@
       }
 
       .dragging {
-        opacity: 0.5;
+        opacity: 0.3;
         transform: scale(0.92);
         box-shadow: 0 2px 0 #5c4033 !important;
+      }
+
+      /* 터치 시 생성되는 미러 고스트 패 */
+      .touch-drag-ghost {
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        transform: translate(-50%, -50%) scale(1.1);
+        opacity: 0.9;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3) !important;
+        transition: transform 0.05s ease;
       }
 
       .drag-over-valid {
@@ -177,7 +193,7 @@
         text-shadow: 1px 1px 0px rgba(92, 64, 51, 0.15);
       }
 
-      /* 1920px 데스크톱 최적화: 넓은 보드와 세로 공간을 효율적으로 사용 */
+      /* 1920px 데스크톱 최적화 */
       @media (min-width: 1440px) {
         body {
           font-size: 0.98rem;
@@ -253,7 +269,7 @@
   <body
     class="flex flex-col min-h-screen relative font-sans antialiased p-2 md:p-4"
   >
-    <!-- 오디오 엘리먼트 (첨부된 음원 파일명 지정) -->
+    <!-- 오디오 엘리먼트 -->
     <audio id="bgmAudio" loop preload="auto">
       <source
         src="vr_TGwce6LCGoZJSmvTM47dA-instrumental.mp3"
@@ -311,7 +327,6 @@
 
       <!-- Controls -->
       <div class="flex flex-wrap items-center gap-2">
-        <!-- BGM 토글 버튼 -->
         <div
           class="bg-forest-beige border-2 border-forest-outline rounded-xl px-3 py-1.5 flex items-center gap-2 shadow-sm"
         >
@@ -733,6 +748,7 @@
       };
 
       let draggedItemInfo = null;
+      let ghostElement = null; // 터치 드래그용 고스트 엘리먼트
 
       const columnsGridEl = document.getElementById("columnsGrid");
       const storageAreaEl = document.getElementById("storageArea");
@@ -815,6 +831,7 @@
 
           const colEl = document.createElement("div");
           colEl.className = `flex flex-col gap-1 md:gap-1.5 p-1 md:p-1.5 track-bg transition-colors duration-200 relative`;
+          colEl.dataset.colIndex = colIdx;
 
           if (isFull) colEl.classList.add("column-full-track");
 
@@ -874,6 +891,7 @@
           classes += "tile-revealed";
           el.innerHTML = tile.pictureType.icon;
 
+          // 데스크톱 드래그
           el.draggable = true;
           el.ondragstart = (e) => {
             const chunkCount = location === "column" ? tileIdx + 1 : 1;
@@ -907,10 +925,175 @@
             draggedItemInfo = null;
             renderBoard();
           };
+
+          // 모바일 터치 이벤트 핸들러
+          el.addEventListener(
+            "touchstart",
+            (e) => handleTouchStart(e, tile, location, colIdx, tileIdx),
+            {passive: false},
+          );
+          el.addEventListener("touchmove", handleTouchMove, {passive: false});
+          el.addEventListener("touchend", handleTouchEnd, {passive: false});
+          el.addEventListener("touchcancel", handleTouchEnd, {passive: false});
         }
 
         el.className = classes;
         return el;
+      }
+
+      // --- 터치 이벤트 핸들링 ---
+      function handleTouchStart(e, tile, location, colIdx, tileIdx) {
+        if (e.touches.length > 1) return;
+        const touch = e.touches[0];
+        const chunkCount = location === "column" ? tileIdx + 1 : 1;
+
+        draggedItemInfo = {
+          tile,
+          source: location,
+          colIndex: colIdx,
+          tileIndex: tileIdx,
+          chunkCount,
+        };
+
+        const targetEl = e.currentTarget;
+        const rect = targetEl.getBoundingClientRect();
+
+        // 고스트 반사체(손가락을 따라다니는 이미지) 생성
+        ghostElement = targetEl.cloneNode(true);
+        ghostElement.classList.add("touch-drag-ghost");
+        ghostElement.style.width = `${rect.width}px`;
+        ghostElement.style.height = `${rect.height}px`;
+        ghostElement.style.left = `${touch.clientX}px`;
+        ghostElement.style.top = `${touch.clientY}px`;
+        document.body.appendChild(ghostElement);
+
+        if (location === "column") {
+          const colContainer = targetEl.parentElement;
+          const tiles = colContainer.querySelectorAll(
+            ".tile-block:not(.disabled-tile)",
+          );
+          for (let i = 0; i <= tileIdx; i++) {
+            if (tiles[i]) tiles[i].classList.add("dragging");
+          }
+        } else {
+          targetEl.classList.add("dragging");
+        }
+      }
+
+      function handleTouchMove(e) {
+        if (!draggedItemInfo || !ghostElement) return;
+        e.preventDefault(); // 스크롤 차단
+
+        const touch = e.touches[0];
+        ghostElement.style.left = `${touch.clientX}px`;
+        ghostElement.style.top = `${touch.clientY}px`;
+
+        // 이동 중 영역 하이라이트
+        const elemBelow = document.elementFromPoint(
+          touch.clientX,
+          touch.clientY,
+        );
+        document
+          .querySelectorAll(".drag-over-valid")
+          .forEach((el) => el.classList.remove("drag-over-valid"));
+
+        if (!elemBelow) return;
+
+        const targetCol = elemBelow.closest("#columnsGrid > div");
+        if (targetCol) {
+          const targetColIdx = parseInt(targetCol.dataset.colIndex);
+          const sourceCol =
+            draggedItemInfo.source === "column"
+              ? draggedItemInfo.colIndex
+              : null;
+          if (checkCanMoveToColumn(draggedItemInfo, targetColIdx, sourceCol)) {
+            targetCol.classList.add("drag-over-valid");
+          }
+        }
+
+        const storage = elemBelow.closest("#storageContainer");
+        if (storage && draggedItemInfo.source !== "storage") {
+          storage.classList.add("drag-over-valid");
+        }
+      }
+
+      function handleTouchEnd(e) {
+        if (!draggedItemInfo) return;
+        e.preventDefault();
+
+        if (ghostElement) {
+          ghostElement.remove();
+          ghostElement = null;
+        }
+
+        document
+          .querySelectorAll(".drag-over-valid")
+          .forEach((el) => el.classList.remove("drag-over-valid"));
+
+        const touch = e.changedTouches[0];
+        const elemBelow = document.elementFromPoint(
+          touch.clientX,
+          touch.clientY,
+        );
+
+        if (elemBelow) {
+          const targetCol = elemBelow.closest("#columnsGrid > div");
+          const storage = elemBelow.closest("#storageContainer");
+
+          if (targetCol) {
+            const targetColIdx = parseInt(targetCol.dataset.colIndex);
+            const sourceCol =
+              draggedItemInfo.source === "column"
+                ? draggedItemInfo.colIndex
+                : null;
+            if (
+              checkCanMoveToColumn(draggedItemInfo, targetColIdx, sourceCol)
+            ) {
+              const rect = targetCol.getBoundingClientRect();
+              const dropY = touch.clientY - rect.top;
+              const position = dropY < rect.height / 2 ? "top" : "bottom";
+              executeMoveDirect(draggedItemInfo, targetColIdx, position);
+              return;
+            }
+          } else if (storage && draggedItemInfo.source !== "storage") {
+            processStorageDrop();
+            return;
+          }
+        }
+
+        document
+          .querySelectorAll(".dragging")
+          .forEach((node) => node.classList.remove("dragging"));
+        draggedItemInfo = null;
+        renderBoard();
+      }
+
+      function processStorageDrop() {
+        let availableSlots =
+          gameState.storageCapacity - gameState.storage.length;
+
+        if (draggedItemInfo.chunkCount > availableSlots) {
+          while (
+            draggedItemInfo.chunkCount >
+              gameState.storageCapacity - gameState.storage.length &&
+            gameState.storageCapacity < MAX_STORAGE_CAPACITY
+          ) {
+            gameState.storageCapacity++;
+            playSound("unlock");
+          }
+        }
+
+        if (gameState.storageCapacity > gameState.maxStorageReached) {
+          gameState.maxStorageReached = gameState.storageCapacity;
+        }
+
+        availableSlots = gameState.storageCapacity - gameState.storage.length;
+
+        if (draggedItemInfo.chunkCount <= availableSlots) {
+          moveSelectedToStorage(draggedItemInfo);
+        } else {
+          alert("보관함 최대치(10칸)를 초과하여 한 번에 보관할 수 없습니다!");
+        }
       }
 
       function renderStorage() {
@@ -954,32 +1137,7 @@
           e.preventDefault();
           storageContainerEl.classList.remove("drag-over-valid");
           if (!draggedItemInfo || draggedItemInfo.source === "storage") return;
-
-          let availableSlots =
-            gameState.storageCapacity - gameState.storage.length;
-
-          if (draggedItemInfo.chunkCount > availableSlots) {
-            while (
-              draggedItemInfo.chunkCount >
-                gameState.storageCapacity - gameState.storage.length &&
-              gameState.storageCapacity < MAX_STORAGE_CAPACITY
-            ) {
-              gameState.storageCapacity++;
-              playSound("unlock");
-            }
-          }
-
-          if (gameState.storageCapacity > gameState.maxStorageReached) {
-            gameState.maxStorageReached = gameState.storageCapacity;
-          }
-
-          availableSlots = gameState.storageCapacity - gameState.storage.length;
-
-          if (draggedItemInfo.chunkCount <= availableSlots) {
-            moveSelectedToStorage(draggedItemInfo);
-          } else {
-            alert("보관함 최대치(10칸)를 초과하여 한 번에 보관할 수 없습니다!");
-          }
+          processStorageDrop();
         };
       }
 
